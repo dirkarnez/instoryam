@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <style>
+    a:visited {
+        color: pink;
+    }
+    </style>
+</head>
+
+<body>
+    <div id="container" style="display: grid;"></div>
+    <script>
+        function addImage(container, src) {
+            const img = document.createElement("img");
+            img.src = src;
+            container.appendChild(img);
+        }
+
+        function addBr(container) {
+            container.appendChild(document.createElement("br"));
+        }
+
+        function addAHref(container, href, innerText) {
+            const a = document.createElement("a");
+            a.href = href;
+            a.target = "__blank";
+            a.innerText = innerText;
+            container.appendChild(a);
+        }
+
+        const container = document.getElementById("container");
+
+        navigator.clipboard.readText()
+            .then(clipText => {
+                if (clipText.startsWith("http")) {
+                    const query_hash = clipText.match(/query_hash=([^&]+)/)[1];
+                    return query_hash;
+                }
+
+                const obj = JSON.parse(clipText);
+                if (!!obj.reels) {
+                    obj.reels["id"].items.forEach((item, i) => {
+                        const a = document.createElement("a");
+
+                        const originalWidth = item.original_width;
+                        const originalHeight = item.original_height;
+
+                        const isVideo = !!item.video_versions;
+
+                        const originalImage = item.image_versions2.candidates
+                            .filter(candidate =>
+                                candidate.width === originalWidth &&
+                                candidate.height === originalHeight
+                            )[0];
+
+
+                        console.log(`candidates.length = ${item.image_versions2.candidates.length}`);
+
+                        console.log(`originalWidth: ${originalWidth}`);
+                        console.log(`originalHeight: ${originalHeight}`);
+                        console.log(`originalImage.width = ${originalImage.width}`);
+                        console.log(`originalImage.height = ${originalImage.height}`);
+
+                        a.href = isVideo ? item.video_versions
+                            .reduce(function (p, c) {
+                                return p.width > c.width || p.height > c.height ? p : c;
+                            })
+                            .url
+                            :
+                            originalImage.url;
+
+                        a.target = "__blank";
+                        a.innerText = `${i} (${isVideo ? "VIDEO" : "IMAGE"})`
+                        container.appendChild(a);
+                    })
+                } else if (!!obj.data && !!obj.data.user && obj.data.user.profile_pic_url_hd) {
+                    const a = document.createElement("a");
+                    a.href = obj.data.user.profile_pic_url_hd;
+                    a.target = "__blank";
+                    a.innerText = `Profile Image`;
+                    container.appendChild(a);
+                } else if (!!obj.data && !!obj.data.reels_media) {
+                    obj.data.reels_media.forEach(reel_media => {
+                        addAHref(container, `https://www.instagram.com/${reel_media.owner.username}`, reel_media.owner.username);
+                        addBr(container);
+                        reel_media.items.forEach(item => {
+                            if (item.__typename == "GraphStoryImage") {
+                                const filtered = item.display_resources.filter(display_resource => {
+                                    return (display_resource.config_width == item.dimensions.width) &&
+                                    (display_resource.config_height == item.dimensions.height)
+                                });
+                                addAHref(container, filtered[0].src, `Image`);
+                            } else if (item.__typename == "GraphStoryVideo") {
+                                item.video_resources.forEach((video_resource, i) => {
+                                    addAHref(container, video_resource.src, `Video ${i}`);
+                                })
+                            }
+                        })
+                        addBr(container);
+                    })
+                } else {
+                    const count = 10;
+
+                   obj
+                    .reduce((prev, current, currentIndex) => {
+                        if (currentIndex % count == 0) {
+                            return [...prev, [current]];
+                        } else {
+                            return prev.map((ele, i) => i == prev.length - 1 ? [...ele, current] : ele)
+                        }
+                    }, [])
+                    .forEach(array => {
+                        const url = `https://www.instagram.com/graphql/query/?query_hash=45246d3fe16ccc6577e0bd297a5db1ab&variables={%22highlight_reel_ids%22:[],%22reel_ids%22:[${array.map(a => `%22${`${a.id}`.trim()}%22`).join(",")}],%22location_ids%22:[],%22precomposed_overlay%22:false}`;
+                        addAHref(container, url, url);
+                        addBr(container);
+                    })
+                }
+            });
+    </script>
+</body>
+
+</html>
